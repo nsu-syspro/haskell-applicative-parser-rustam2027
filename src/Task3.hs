@@ -4,8 +4,11 @@
 module Task3 where
 
 import Parser
-import Data.Char (toLower)
+import Data.Char ( toLower )
 import Data.List (intercalate)
+import ParserCombinators (char, sepBy, choice, string, count)
+import Control.Applicative (Alternative(..))
+import GHC.Unicode (isHexDigit)
 
 -- | JSON representation
 --
@@ -37,8 +40,68 @@ data JValue =
 -- >>> parse json "{{}}"
 -- Failed [PosError 0 (Unexpected '{'),PosError 1 (Unexpected '{')]
 --
+
+object :: Parser JValue
+object = JObject [] <$ (char '{' *> whiteSpace <* char '}')
+     <|> JObject <$> (char '{' *> whiteSpace *> sepBy pair (char ',' <* whiteSpace) <* char '}')
+  where
+    pair = (,) <$> someString <* whiteSpace <* char ':' <* whiteSpace <*> value
+
+array :: Parser JValue
+array = JArray [] <$ (char '[' *> whiteSpace <* char ']')
+  <|> JArray <$> (char '[' *> sepBy value (char ',') <* char ']')
+
+whiteSpace :: Parser String
+whiteSpace = many (choice (char <$> [' ', '\n', '\r', '\t']))
+
+value :: Parser JValue
+-- value = whiteSpace *> choice [
+--     jstring,
+--     number,
+--     object,
+--     array,
+--     bool,
+--     Task3.null
+--   ] <* whiteSpace
+--
+value = whiteSpace *> (object <|> array <|> jstring <|> number <|> bool <|> Task3.null) <* whiteSpace
+
+jstring :: Parser JValue
+jstring = JString <$> someString
+
+hex :: Parser Char
+hex = satisfy isHexDigit
+
+someString :: Parser String
+someString = char '"' *> stringContent <* char '"' where
+  stringContent :: Parser String
+  stringContent = concat <$> many (((: []) <$> satisfy (\x -> x /= '"' && x /= '\\')) <|> escapeChar)
+  escapeChar = string "\\" <> (choice (string <$> ["\"", "\\", ['/'], "b", "f", "n", "r", "t"]) <|> count 4 hex)
+
+number :: Parser JValue
+number = JNumber . read <$> (option (string "-")
+                         <> (zero <|> (((: []) <$> digitNoZero) <> many digit)))
+                         <> option (string "." <> some digit)
+                         <> option (choice [string "E", string "e"] <> option (choice [string "-", string "+"]) <> some digit)
+
+digitNoZero :: Parser Char
+digitNoZero = satisfy (\x -> '0' < x && x <= '9')
+
+zero :: Parser String
+zero = string "0"
+
+digit :: Parser Char
+digit = digitNoZero <|> char '0'
+
+bool :: Parser JValue
+bool = choice [JBool True <$ string "true",
+   JBool False <$ string "false"]
+
+null :: Parser JValue
+null = JNull <$ string "null"
+
 json :: Parser JValue
-json = error "TODO: define json"
+json = value
 
 -- * Rendering helpers
 

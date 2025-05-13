@@ -4,6 +4,14 @@
 module Task1 where
 
 import Parser
+import ParserCombinators
+import Data.Char (isDigit, digitToInt)
+import Control.Applicative (Alternative(some, (<|>)))
+
+getIntegerFromString :: [Char] -> Integer
+getIntegerFromString = toInteger . go 0 where
+  go s (x:_) = s * 10 + digitToInt x
+  go s [] = s
 
 -- | Parses natural number (including zero)
 --
@@ -21,7 +29,10 @@ import Parser
 -- Parsed 123 (Input 3 "abc")
 --
 nat :: Parser Integer
-nat = error "TODO: define nat"
+nat = read <$> some (satisfy isDigit)
+
+neg :: Parser Integer
+neg = char '-' *> ((*) (-1) . read <$> some (satisfy isDigit))
 
 -- | Parses integer number
 --
@@ -39,4 +50,5 @@ nat = error "TODO: define nat"
 -- Parsed 123 (Input 3 "abc")
 --
 int :: Parser Integer
-int = error "TODO: define int"
+int = neg <|> nat
+
