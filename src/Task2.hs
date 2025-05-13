@@ -4,6 +4,10 @@
 module Task2 where
 
 import Parser
+import ParserCombinators (string, choice, char)
+import Control.Applicative ((<|>))
+import Data.List (elemIndex)
+import Data.Maybe (fromJust)
 
 -- | Date representation
 --
@@ -58,5 +62,54 @@ newtype Year  = Year  Int deriving (Show, Eq)
 -- >>> parse date "12/12/2012"
 -- Failed [PosError 2 (Unexpected '/'),PosError 0 (Unexpected '1')]
 --
+
+
+monthNames :: [String]
+monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+monthName :: Parser Month
+monthName = Month . (+1) . fromJust . flip elemIndex monthNames <$> choice (string <$> monthNames)
+
+nonZeroDigit :: Parser String
+nonZeroDigit = (: []) <$> satisfy (\x ->  '1' <= x && x <= '9')
+
+digit :: Parser String
+digit = string "0" <|> nonZeroDigit
+
+number :: Parser String
+number = digit <> number <|> digit
+
+year :: Parser Year
+year = Year . read <$> number
+
+dateEnd :: Parser String
+dateEnd = choice (string <$> ["1", "2"]) <> digit <|>
+  choice (string <$> ["30", "31"])
+
+day :: Parser Day
+day = Day . read <$> (
+  char '0' *> nonZeroDigit <|>
+  dateEnd)
+
+usDay :: Parser Day
+usDay = Day . read <$> (
+  dateEnd <|>
+  nonZeroDigit
+  )
+
+month :: Parser Month
+month = Month . read <$>
+  (char '0' *> nonZeroDigit <|>
+  (string "1" <> choice (string <$> ["0", "1", "2"])))
+
+usDate :: Parser Date
+usDate = flip Date <$> monthName <* char ' ' <*> usDay <* char ' ' <*> year
+
+hyphenFormat :: Parser Date
+hyphenFormat = Date <$> day <* char '-' <*> month <* char '-' <*> year
+
+dotFormat :: Parser Date
+dotFormat = Date <$> day <* char '.' <*> month <* char '.' <*> year
+
 date :: Parser Date
-date = error "TODO: define date"
+date = dotFormat <|> hyphenFormat <|> usDate
